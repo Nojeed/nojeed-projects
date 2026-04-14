@@ -1,5 +1,5 @@
 export type UserRole = 'admin' | 'project_manager' | 'employee' | 'client';
-
+export type ProjectRole = 'admin' | 'project_manager' | 'member';
 export type TaskStatus = 'todo' | 'in_progress' | 'in_review' | 'done';
 export type TaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
@@ -7,6 +7,7 @@ export type TicketType = 'change_request' | 'maintenance' | 'bug' | 'support';
 
 export interface Profile {
   id: string;
+  username: string;
   email: string;
   full_name: string;
   role: UserRole;
@@ -20,7 +21,6 @@ export interface Project {
   name: string;
   description: string;
   status: 'active' | 'completed' | 'on_hold' | 'cancelled';
-  client_id?: string;
   created_at: string;
   updated_at: string;
 }
@@ -29,7 +29,7 @@ export interface ProjectMember {
   id: string;
   project_id: string;
   user_id: string;
-  role: 'admin' | 'project_manager' | 'member';
+  project_role: ProjectRole;
   assigned_at: string;
   profile?: Profile;
 }
@@ -69,8 +69,9 @@ export interface Ticket {
   project?: { id: string; name: string };
 }
 
-export interface KanbanColumn {
-  id: TaskStatus;
-  title: string;
-  tasks: Task[];
+export interface ClientProject {
+  id: string;
+  client_id: string;
+  project_id: string;
+  assigned_at: string;
 }

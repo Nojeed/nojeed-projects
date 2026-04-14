@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-
+import { Badge } from "@/components/ui/badge";
 import { FolderKanban, ArrowRight, CheckSquare, MessageSquare } from "lucide-react";
 import Link from "next/link";
 
@@ -15,7 +15,6 @@ export default function MyProjectsPage() {
 
   useEffect(() => {
     fetchProjects();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const fetchProjects = async () => {
@@ -23,35 +22,28 @@ export default function MyProjectsPage() {
     if (!user) return;
 
     const { data } = await supabase
-      .from("projects")
+      .from("client_projects")
       .select(`
         *,
-        project_members(
-          role,
-          profiles(full_name)
-        ),
-        tasks(count),
-        tickets(count)
+        project:projects(
+          id, name, description, status,
+          tasks(count),
+          tickets(count)
+        )
       `)
-      .eq("client_id", user.id)
-      .order("created_at", { ascending: false });
+      .eq("client_id", user.id);
 
-    setProjects(data || []);
+    setProjects(data?.map(d => d.project).filter(Boolean) || []);
     setLoading(false);
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "active":
-        return "bg-green-500";
-      case "completed":
-        return "bg-blue-500";
-      case "on_hold":
-        return "bg-yellow-500";
-      case "cancelled":
-        return "bg-red-500";
-      default:
-        return "bg-gray-500";
+      case "active": return "bg-green-500";
+      case "completed": return "bg-blue-500";
+      case "on_hold": return "bg-yellow-500";
+      case "cancelled": return "bg-red-500";
+      default: return "bg-gray-500";
     }
   };
 
@@ -113,6 +105,7 @@ export default function MyProjectsPage() {
         <div className="text-center py-12 text-muted-foreground">
           <FolderKanban className="h-12 w-12 mx-auto mb-4 opacity-50" />
           <p>No projects assigned to you yet</p>
+          <p className="text-sm mt-2">Contact an admin to get access to your projects</p>
         </div>
       )}
     </div>

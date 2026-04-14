@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   const pathname = request.nextUrl.pathname;
   
-  const publicRoutes = ['/', '/auth/login', '/auth/sign-up', '/auth/forgot-password', '/auth/update-password'];
+  const publicRoutes = ['/', '/auth/login', '/auth/forgot-password', '/auth/update-password'];
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   if (!user && !isPublicRoute) {
@@ -57,7 +57,7 @@ export async function proxy(request: NextRequest) {
     const userRole = profile?.role as UserRole;
 
     const roleRoutes: Record<UserRole, string[]> = {
-      admin: ['/dashboard', '/dashboard/admin', '/dashboard/projects', '/dashboard/projects/new'],
+      admin: ['/dashboard', '/dashboard/team', '/dashboard/projects', '/dashboard/projects/new'],
       project_manager: ['/dashboard', '/dashboard/projects', '/dashboard/tasks'],
       employee: ['/dashboard', '/dashboard/tasks'],
       client: ['/dashboard', '/dashboard/my-projects', '/dashboard/requests'],
@@ -74,7 +74,7 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(url);
     }
 
-    if (pathname === '/auth/login' || pathname === '/auth/sign-up') {
+    if (pathname === '/auth/login') {
       const url = request.nextUrl.clone();
       url.pathname = '/dashboard';
       return NextResponse.redirect(url);

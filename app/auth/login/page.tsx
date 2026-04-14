@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import Link from "next/link";
+import { AlertCircle } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -25,22 +27,41 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    setError("");
+    setLoading(true);
+    
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
+    const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
+    
+    // Look up email by username
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("email")
+      .eq("username", username)
+      .single();
+
+    if (!profile) {
+      setError("Invalid username or password");
+      setLoading(false);
+      return;
+    }
+
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: profile.email,
       password,
     });
 
-    if (error) {
-      alert(error.message);
+    if (authError) {
+      console.error("Auth error:", authError);
+      setError(authError.message || "Login failed. Please try again.");
     } else {
       router.push("/dashboard");
       router.refresh();
     }
+    setLoading(false);
   };
 
   if (!mounted) {
@@ -60,42 +81,39 @@ export default function LoginPage() {
         </CardHeader>
         <form onSubmit={handleLogin}>
           <CardContent className="space-y-4">
+            {error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">
+                <AlertCircle className="h-4 w-4" />
+                {error}
+              </div>
+            )}
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="username">Username</Label>
               <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="you@example.com"
+                id="username"
+                name="username"
+                type="text"
+                placeholder="Enter your username"
                 required
+                autoComplete="username"
               />
             </div>
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="password">Password</Label>
-                <Link href="/auth/forgot-password" className="text-sm text-primary hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
+              <Label htmlFor="password">Password</Label>
               <Input
                 id="password"
                 name="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder="Enter your password"
                 required
+                autoComplete="current-password"
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full">
-              Sign In
+          <CardFooter>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Signing in..." : "Sign In"}
             </Button>
-            <p className="text-sm text-muted-foreground text-center">
-              Don&apos;t have an account?{" "}
-              <Link href="/auth/sign-up" className="text-primary hover:underline">
-                Sign up
-              </Link>
-            </p>
           </CardFooter>
         </form>
       </Card>

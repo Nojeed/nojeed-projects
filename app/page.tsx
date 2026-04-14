@@ -28,7 +28,7 @@ export default async function Home() {
             <Link href="/auth/login">
               <Button variant="ghost">Sign In</Button>
             </Link>
-            <Link href="/auth/sign-up">
+            <Link href="/auth/login">
               <Button>Get Started</Button>
             </Link>
           </div>
@@ -48,14 +48,9 @@ export default async function Home() {
               and keep clients informed every step of the way.
             </p>
             <div className="flex gap-4 justify-center">
-              <Link href="/auth/sign-up">
-                <Button size="lg">
-                  Start Free <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
               <Link href="/auth/login">
-                <Button size="lg" variant="outline">
-                  Sign In
+                <Button size="lg">
+                  Sign In <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -110,11 +105,11 @@ export default async function Home() {
           <div className="max-w-2xl mx-auto">
             <h2 className="text-3xl font-bold mb-4">Ready to get started?</h2>
             <p className="text-muted-foreground mb-8">
-              Create your free account and start managing projects better today.
+              Contact your administrator to get your account credentials.
             </p>
-            <Link href="/auth/sign-up">
+            <Link href="/auth/login">
               <Button size="lg">
-                Create Free Account <ArrowRight className="ml-2 h-4 w-4" />
+                Sign In <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </div>

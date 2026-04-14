@@ -1,10 +1,18 @@
 -- Project Management App Database Schema
 -- Run this in Supabase SQL Editor
 
+-- Drop existing tables if recreating (careful in production!)
+DROP TABLE IF EXISTS tickets CASCADE;
+DROP TABLE IF EXISTS tasks CASCADE;
+DROP TABLE IF EXISTS project_members CASCADE;
+DROP TABLE IF EXISTS projects CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+
 -- Profiles table (extends auth.users)
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  email TEXT NOT NULL,
+  username TEXT UNIQUE NOT NULL,
+  email TEXT UNIQUE NOT NULL,
   full_name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('admin', 'project_manager', 'employee', 'client')) DEFAULT 'employee',
   avatar_url TEXT,
@@ -18,7 +26,6 @@ CREATE TABLE projects (
   name TEXT NOT NULL,
   description TEXT,
   status TEXT NOT NULL CHECK (status IN ('active', 'completed', 'on_hold', 'cancelled')) DEFAULT 'active',
-  client_id UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -28,7 +35,7 @@ CREATE TABLE project_members (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
   user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
-  role TEXT NOT NULL CHECK (role IN ('admin', 'project_manager', 'member')),
+  project_role TEXT NOT NULL CHECK (project_role IN ('admin', 'project_manager', 'member')) DEFAULT 'member',
   assigned_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(project_id, user_id)
 );
@@ -64,6 +71,15 @@ CREATE TABLE tickets (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Client projects (which projects a client can access)
+CREATE TABLE client_projects (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(client_id, project_id)
+);
+
 -- Row Level Security Policies
 
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -71,38 +87,37 @@ ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE client_projects ENABLE ROW LEVEL SECURITY;
 
 -- Profiles policies
 CREATE POLICY "Users can view all profiles" ON profiles FOR SELECT USING (true);
 CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Admins can insert profiles" ON profiles FOR INSERT WITH CHECK (
+CREATE POLICY "Admins can manage profiles" ON profiles FOR ALL USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
 -- Projects policies
-CREATE POLICY "Everyone can view projects they are members of" ON projects FOR SELECT USING (
+CREATE POLICY "Everyone can view projects they're members of" ON projects FOR SELECT USING (
   EXISTS (SELECT 1 FROM project_members WHERE project_id = projects.id AND user_id = auth.uid())
+  OR EXISTS (SELECT 1 FROM client_projects WHERE project_id = projects.id AND client_id = auth.uid())
 );
 CREATE POLICY "Admins can insert projects" ON projects FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
-CREATE POLICY "Admins can update projects" ON projects FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
-);
-CREATE POLICY "Admins can delete projects" ON projects FOR DELETE USING (
+CREATE POLICY "Admins and PMs can update projects" ON projects FOR UPDATE USING (
   EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
 -- Project members policies
 CREATE POLICY "Members can view project membership" ON project_members FOR SELECT USING (true);
-CREATE POLICY "Admins and PMs can manage project members" ON project_members FOR ALL USING (
+CREATE POLICY "PMs and admins can manage project members" ON project_members FOR ALL USING (
   EXISTS (
     SELECT 1 FROM project_members pm
+    JOIN profiles p ON pm.user_id = p.id
     WHERE pm.project_id = project_members.project_id
     AND pm.user_id = auth.uid()
-    AND pm.role IN ('admin', 'project_manager')
+    AND (pm.project_role IN ('admin', 'project_manager') OR p.role = 'admin')
   )
-  OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
 -- Tasks policies
@@ -112,33 +127,42 @@ CREATE POLICY "Project members can view tasks" ON tasks FOR SELECT USING (
 CREATE POLICY "Project members can create tasks" ON tasks FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM project_members WHERE project_id = tasks.project_id AND user_id = auth.uid())
 );
-CREATE POLICY "Task assignees and PMs can update tasks" ON tasks FOR UPDATE USING (
-  EXISTS (SELECT 1 FROM project_members WHERE project_id = tasks.project_id AND user_id = auth.uid())
-);
-CREATE POLICY "PMs and admins can delete tasks" ON tasks FOR DELETE USING (
+CREATE POLICY "Assignees and PMs can update tasks" ON tasks FOR UPDATE USING (
+  assigned_to = auth.uid() OR
   EXISTS (
     SELECT 1 FROM project_members pm
     WHERE pm.project_id = tasks.project_id
     AND pm.user_id = auth.uid()
-    AND pm.role IN ('admin', 'project_manager')
+    AND pm.project_role IN ('admin', 'project_manager')
   )
 );
 
 -- Tickets policies
 CREATE POLICY "Project members can view tickets" ON tickets FOR SELECT USING (
   EXISTS (SELECT 1 FROM project_members WHERE project_id = tickets.project_id AND user_id = auth.uid())
+  OR requested_by = auth.uid()
 );
 CREATE POLICY "Project members can create tickets" ON tickets FOR INSERT WITH CHECK (
   EXISTS (SELECT 1 FROM project_members WHERE project_id = tickets.project_id AND user_id = auth.uid())
+  OR requested_by = auth.uid()
 );
 CREATE POLICY "PMs and admins can update tickets" ON tickets FOR UPDATE USING (
   EXISTS (
     SELECT 1 FROM project_members pm
     WHERE pm.project_id = tickets.project_id
     AND pm.user_id = auth.uid()
-    AND pm.role IN ('admin', 'project_manager')
+    AND pm.project_role IN ('admin', 'project_manager')
   )
-  OR auth.uid() = requested_by
+  OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+-- Client projects policies
+CREATE POLICY "Clients can view their projects" ON client_projects FOR SELECT USING (
+  client_id = auth.uid() OR
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role IN ('admin', 'project_manager'))
+);
+CREATE POLICY "Admins can manage client projects" ON client_projects FOR ALL USING (
+  EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
 );
 
 -- Functions
@@ -147,42 +171,61 @@ CREATE POLICY "PMs and admins can update tickets" ON tickets FOR UPDATE USING (
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
-  INSERT INTO public.profiles (id, email, full_name, role)
+  INSERT INTO public.profiles (id, username, email, full_name, role)
   VALUES (
     NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'username', split_part(NEW.email, '@', 1)),
     NEW.email,
-    COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
     COALESCE(NEW.raw_user_meta_data->>'role', 'employee')
   );
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Trigger for auto-creating profile
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- Function to get user's role
-CREATE OR REPLACE FUNCTION get_user_role(user_id UUID)
-RETURNS TEXT AS $$
-  SELECT role FROM profiles WHERE id = user_id;
-$$ LANGUAGE sql SECURITY DEFINER;
+-- Admin function to create user (no email verification)
+CREATE OR REPLACE FUNCTION public.admin_create_user(
+  p_username TEXT,
+  p_email TEXT,
+  p_password TEXT,
+  p_full_name TEXT,
+  p_role TEXT,
+  p_project_id UUID DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+  new_user_id UUID;
+BEGIN
+  -- Check if caller is admin
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin') THEN
+    RAISE EXCEPTION 'Only admins can create users';
+  END IF;
 
--- Function to get user's projects
-CREATE OR REPLACE FUNCTION get_user_projects(user_id UUID)
-RETURNS TABLE (
-  project_id UUID,
-  project_name TEXT,
-  project_status TEXT,
-  member_role TEXT
-) AS $$
-  SELECT 
-    p.id as project_id,
-    p.name as project_name,
-    p.status as project_status,
-    pm.role as member_role
-  FROM projects p
-  JOIN project_members pm ON p.id = pm.project_id
-  WHERE pm.user_id = $1;
-$$ LANGUAGE sql SECURITY DEFINER;
+  -- Check username uniqueness
+  IF EXISTS (SELECT 1 FROM profiles WHERE username = p_username) THEN
+    RAISE EXCEPTION 'Username already exists';
+  END IF;
+
+  -- Create auth user with auto-confirm (no email verification)
+  INSERT INTO auth.users (email, password, email_confirm_at, raw_user_meta_data)
+  VALUES (
+    p_email,
+    p_password,
+    NOW(),
+    jsonb_build_object('username', p_username, 'full_name', p_full_name, 'role', p_role)
+  )
+  RETURNING id INTO new_user_id;
+
+  -- If client and project provided, assign to project
+  IF p_role = 'client' AND p_project_id IS NOT NULL THEN
+    INSERT INTO client_projects (client_id, project_id)
+    VALUES (new_user_id, p_project_id);
+  END IF;
+
+  RETURN new_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
