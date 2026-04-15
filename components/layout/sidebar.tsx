@@ -33,7 +33,7 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "project_manager", "employee", "client"] },
-  { title: "Projects", href: "/dashboard/projects", icon: FolderKanban, roles: ["admin", "project_manager"] },
+  { title: "Projects", href: "/dashboard/projects", icon: FolderKanban, roles: ["admin", "project_manager", "employee"] },
   { title: "My Tasks", href: "/dashboard/tasks", icon: CheckSquare, roles: ["admin", "project_manager", "employee"] },
   { title: "My Projects", href: "/dashboard/my-projects", icon: FolderKanban, roles: ["client"] },
   { title: "Requests", href: "/dashboard/requests", icon: MessageSquare, roles: ["client"] },

@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, UserPlus, Users, AlertCircle, CheckCircle } from "lucide-react";
@@ -95,26 +95,33 @@ export default function TeamPage() {
     setSubmitting(true);
     setMessage(null);
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: developerForm.username,
+          email: developerForm.email,
+          password: developerForm.password,
+          full_name: developerForm.full_name,
+          role: developerForm.role,
+        }),
+      });
 
-    // Call admin function to create user
-    const { data, error } = await supabase.rpc('admin_create_user', {
-      p_username: developerForm.username,
-      p_email: developerForm.email,
-      p_password: developerForm.password,
-      p_full_name: developerForm.full_name,
-      p_role: developerForm.role,
-      p_project_id: null
-    });
+      const data = await res.json();
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || "Failed to create user" });
+        setSubmitting(false);
+        return;
+      }
+
       setMessage({ type: 'success', text: 'Developer added successfully!' });
       setAddDeveloperOpen(false);
       setDeveloperForm({ username: "", email: "", password: "", full_name: "", role: "employee" });
       fetchUsers();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
     }
     setSubmitting(false);
   };
@@ -123,22 +130,34 @@ export default function TeamPage() {
     setSubmitting(true);
     setMessage(null);
 
-    const { data, error } = await supabase.rpc('admin_create_user', {
-      p_username: clientForm.username,
-      p_email: clientForm.email,
-      p_password: clientForm.password,
-      p_full_name: clientForm.full_name,
-      p_role: 'client',
-      p_project_id: clientForm.project_id || null
-    });
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          username: clientForm.username,
+          email: clientForm.email,
+          password: clientForm.password,
+          full_name: clientForm.full_name,
+          role: 'client',
+          project_id: clientForm.project_id || null,
+        }),
+      });
 
-    if (error) {
-      setMessage({ type: 'error', text: error.message });
-    } else {
+      const data = await res.json();
+
+      if (!res.ok) {
+        setMessage({ type: 'error', text: data.error || "Failed to create client" });
+        setSubmitting(false);
+        return;
+      }
+
       setMessage({ type: 'success', text: 'Client added successfully!' });
       setAddClientOpen(false);
       setClientForm({ username: "", email: "", password: "", full_name: "", project_id: "" });
       fetchUsers();
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.message });
     }
     setSubmitting(false);
   };
@@ -146,8 +165,15 @@ export default function TeamPage() {
   const handleDeleteUser = async (userId: string) => {
     if (!confirm("Are you sure you want to delete this user?")) return;
     
-    // Delete from profiles (cascades to auth.users via trigger if set up)
     await supabase.from("profiles").delete().eq("id", userId);
+    fetchUsers();
+  };
+
+  const handleUpdateRole = async (userId: string, newRole: UserRole) => {
+    await supabase
+      .from("profiles")
+      .update({ role: newRole, updated_at: new Date().toISOString() })
+      .eq("id", userId);
     fetchUsers();
   };
 
@@ -332,23 +358,23 @@ export default function TeamPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>Assign to Project</Label>
-                    <Select
-                      value={clientForm.project_id}
-                      onValueChange={(v) => setClientForm({ ...clientForm, project_id: v })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select project" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">No project (can be assigned later)</SelectItem>
-                        {projects.map((project) => (
-                          <SelectItem key={project.id} value={project.id}>
-                            {project.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                      <Label>Assign to Project</Label>
+                      <Select
+                        value={clientForm.project_id || "none"}
+                        onValueChange={(v) => setClientForm({ ...clientForm, project_id: v === "none" ? "" : v })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select project" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No project (assign later)</SelectItem>
+                          {projects.map((project) => (
+                            <SelectItem key={project.id} value={project.id}>
+                              {project.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                   </div>
                 </div>
               </div>
@@ -362,13 +388,6 @@ export default function TeamPage() {
           </Dialog>
         </div>
       </div>
-
-      {message && (
-        <div className={`flex items-center gap-2 p-3 rounded-lg ${message.type === 'error' ? 'bg-destructive/10 text-destructive' : 'bg-green-500/10 text-green-600'}`}>
-          {message.type === 'error' ? <AlertCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-          {message.text}
-        </div>
-      )}
 
       <div className="flex gap-4">
         <div className="relative flex-1">
@@ -430,9 +449,9 @@ export default function TeamPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => {
                           const newRole = user.role === 'project_manager' ? 'employee' : 'project_manager';
-                          supabase.from('profiles').update({ role: newRole }).eq('id', user.id).then(() => fetchUsers());
+                          handleUpdateRole(user.id, newRole);
                         }}>
-                          {user.role === 'project_manager' ? 'Downgrade to Developer' : 'Promote to Project Manager'}
+                          {user.role === 'project_manager' ? 'Downgrade to Developer' : 'Promote to PM'}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteUser(user.id)}>

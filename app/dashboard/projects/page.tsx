@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, MoreHorizontal, Users } from "lucide-react";
+import { Plus, MoreHorizontal, Users, Calendar } from "lucide-react";
 import Link from "next/link";
 import {
   DropdownMenu,
@@ -24,30 +24,20 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import type { Profile } from "@/types";
 
 export default function ProjectsPage() {
   const supabase = createClient();
   const [projects, setProjects] = useState<any[]>([]);
-  const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     description: "",
-    client_id: "",
+    deadline: "",
   });
 
   useEffect(() => {
     fetchProjects();
-    fetchUsers();
   }, []);
 
   const fetchProjects = async () => {
@@ -62,7 +52,6 @@ export default function ProjectsPage() {
       .from("projects")
       .select(`
         *,
-        client:profiles!projects_client_id_fkey(full_name, email),
         project_members(count)
       `);
 
@@ -80,11 +69,6 @@ export default function ProjectsPage() {
     setLoading(false);
   };
 
-  const fetchUsers = async () => {
-    const { data } = await supabase.from("profiles").select("*").order("full_name");
-    setUsers(data || []);
-  };
-
   const handleCreateProject = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     
@@ -93,7 +77,7 @@ export default function ProjectsPage() {
       .insert({
         name: formData.name,
         description: formData.description,
-        client_id: formData.client_id || null,
+        deadline: formData.deadline || null,
       })
       .select()
       .single();
@@ -107,28 +91,28 @@ export default function ProjectsPage() {
       await supabase.from("project_members").insert({
         project_id: project.id,
         user_id: user.id,
-        role: "admin",
+        project_role: "admin",
       });
     }
 
     setOpen(false);
-    setFormData({ name: "", description: "", client_id: "" });
+    setFormData({ name: "", description: "", deadline: "" });
     fetchProjects();
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "active":
-        return "bg-green-500";
-      case "completed":
-        return "bg-blue-500";
-      case "on_hold":
-        return "bg-yellow-500";
-      case "cancelled":
-        return "bg-red-500";
-      default:
-        return "bg-gray-500";
+      case "active": return "bg-green-500";
+      case "completed": return "bg-blue-500";
+      case "on_hold": return "bg-yellow-500";
+      case "cancelled": return "bg-red-500";
+      default: return "bg-gray-500";
     }
+  };
+
+  const isOverdue = (deadline: string) => {
+    if (!deadline) return false;
+    return new Date(deadline) < new Date();
   };
 
   if (loading) {
@@ -174,22 +158,13 @@ export default function ProjectsPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="client">Client (Optional)</Label>
-                <Select
-                  value={formData.client_id}
-                  onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {users.filter(u => u.role === "client").map((user) => (
-                      <SelectItem key={user.id} value={user.id}>
-                        {user.full_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="deadline">Deadline (Optional)</Label>
+                <Input
+                  id="deadline"
+                  type="date"
+                  value={formData.deadline}
+                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                />
               </div>
             </div>
             <DialogFooter>
@@ -231,7 +206,7 @@ export default function ProjectsPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-2">
                   <div className={`w-2 h-2 rounded-full ${getStatusColor(project.status)}`} />
                   <span className="text-sm capitalize">{project.status.replace('_', ' ')}</span>
@@ -241,9 +216,10 @@ export default function ProjectsPage() {
                   <span className="text-sm">{project.project_members?.[0]?.count || 0}</span>
                 </div>
               </div>
-              {project.client && (
-                <div className="mt-3 pt-3 border-t">
-                  <p className="text-xs text-muted-foreground">Client: {project.client.full_name}</p>
+              {project.deadline && (
+                <div className={`flex items-center gap-2 text-sm ${isOverdue(project.deadline) ? 'text-red-500' : 'text-muted-foreground'}`}>
+                  <Calendar className="h-4 w-4" />
+                  <span>Due: {new Date(project.deadline).toLocaleDateString()}</span>
                 </div>
               )}
             </CardContent>

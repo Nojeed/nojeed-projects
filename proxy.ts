@@ -57,16 +57,18 @@ export async function proxy(request: NextRequest) {
     const userRole = profile?.role as UserRole;
 
     const roleRoutes: Record<UserRole, string[]> = {
-      admin: ['/dashboard', '/dashboard/team', '/dashboard/projects', '/dashboard/projects/new'],
-      project_manager: ['/dashboard', '/dashboard/projects', '/dashboard/tasks'],
-      employee: ['/dashboard', '/dashboard/tasks'],
-      client: ['/dashboard', '/dashboard/my-projects', '/dashboard/requests'],
+      admin: ['/dashboard', '/dashboard/team', '/dashboard/projects', '/dashboard/tasks', '/dashboard/requests', '/dashboard/settings'],
+      project_manager: ['/dashboard', '/dashboard/projects', '/dashboard/tasks', '/dashboard/requests', '/dashboard/settings'],
+      employee: ['/dashboard', '/dashboard/projects', '/dashboard/tasks', '/dashboard/requests', '/dashboard/settings'],
+      client: ['/dashboard', '/dashboard/my-projects', '/dashboard/requests', '/dashboard/settings'],
     };
 
     const allowedRoutes = roleRoutes[userRole] || ['/dashboard'];
-    const isAllowedRoute = allowedRoutes.some(route => 
-      pathname === route || pathname.startsWith(route + '/')
-    );
+    const isAllowedRoute =
+      pathname.startsWith('/api/') ||
+      allowedRoutes.some(route =>
+        pathname === route || pathname.startsWith(route + '/')
+      );
 
     if (!isAllowedRoute) {
       const url = request.nextUrl.clone();

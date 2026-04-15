@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { FolderKanban, CheckSquare, MessageSquare, Users, ArrowRight } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -25,14 +26,25 @@ export default async function DashboardPage() {
     .eq("id", user.id)
     .single();
 
-  const { data: projects } = await supabase
-    .from("project_members")
-    .select(`
-      projects (
-        id, name, status
-      )
-    `)
-    .eq("user_id", user.id);
+  const isClient = profile?.role === "client";
+  const isAdmin = profile?.role === "admin";
+  const isDevOrPM = profile?.role === "employee" || profile?.role === "project_manager";
+
+  // Fetch projects based on role
+  let projectsList: any[] = [];
+  if (isClient) {
+    const { data } = await supabase
+      .from("client_projects")
+      .select("projects(id, name, status)")
+      .eq("client_id", user.id);
+    projectsList = (data || []).map((cp: any) => cp.projects).filter(Boolean);
+  } else {
+    const { data } = await supabase
+      .from("project_members")
+      .select("projects(id, name, status)")
+      .eq("user_id", user.id);
+    projectsList = (data || []).map((pm: any) => pm.projects).filter(Boolean);
+  }
 
   const { data: tasks } = await supabase
     .from("tasks")
@@ -40,9 +52,43 @@ export default async function DashboardPage() {
     .eq("assigned_to", user.id)
     .neq("status", "done");
 
+  // Fetch open requests scoped by role
+  let openTickets: any[] = [];
+  if (isAdmin) {
+    const { data } = await supabase
+      .from("tickets")
+      .select("*, project:projects(name), requester:profiles!tickets_requested_by_fkey(full_name)")
+      .in("status", ["open", "in_progress"])
+      .order("created_at", { ascending: false })
+      .limit(5);
+    openTickets = data || [];
+  } else if (isDevOrPM) {
+    const memberProjectIds = projectsList.map((p: any) => p.id);
+    if (memberProjectIds.length > 0) {
+      const { data } = await supabase
+        .from("tickets")
+        .select("*, project:projects(name), requester:profiles!tickets_requested_by_fkey(full_name)")
+        .in("project_id", memberProjectIds)
+        .in("status", ["open", "in_progress"])
+        .order("created_at", { ascending: false })
+        .limit(5);
+      openTickets = data || [];
+    }
+  } else if (isClient) {
+    const { data } = await supabase
+      .from("tickets")
+      .select("*, project:projects(name)")
+      .eq("requested_by", user.id)
+      .in("status", ["open", "in_progress"])
+      .order("created_at", { ascending: false })
+      .limit(5);
+    openTickets = data || [];
+  }
+
   const stats = {
-    projects: projects?.length || 0,
+    projects: projectsList.length,
     tasks: tasks?.length || 0,
+    openRequests: openTickets.length,
   };
 
   const getGreeting = () => {
@@ -50,6 +96,11 @@ export default async function DashboardPage() {
     if (hour < 12) return "Good morning";
     if (hour < 18) return "Good afternoon";
     return "Good evening";
+  };
+
+  const statusColors: Record<string, string> = {
+    open: "bg-yellow-500",
+    in_progress: "bg-blue-500",
   };
 
   return (
@@ -74,7 +125,7 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {profile?.role !== "client" && (
+        {!isClient && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Pending Tasks</CardTitle>
@@ -86,19 +137,19 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        {profile?.role === "client" && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium">Open Requests</CardTitle>
-              <MessageSquare className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">0</div>
-            </CardContent>
-          </Card>
-        )}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">
+              {isClient ? "My Open Requests" : "Open Requests"}
+            </CardTitle>
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.openRequests}</div>
+          </CardContent>
+        </Card>
 
-        {profile?.role === "admin" && (
+        {isAdmin && (
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium">Team Members</CardTitle>
@@ -118,13 +169,13 @@ export default async function DashboardPage() {
             <CardDescription>Your active projects</CardDescription>
           </CardHeader>
           <CardContent>
-            {projects && projects.length > 0 ? (
+            {projectsList.length > 0 ? (
               <ul className="space-y-3">
-                {projects.slice(0, 5).map((member: any) => (
-                  <li key={member.projects?.id} className="flex items-center justify-between">
-                    <span className="font-medium">{member.projects?.name}</span>
+                {projectsList.slice(0, 5).map((project: any) => (
+                  <li key={project.id} className="flex items-center justify-between">
+                    <span className="font-medium">{project.name}</span>
                     <span className="text-sm text-muted-foreground capitalize">
-                      {member.projects?.status}
+                      {project.status}
                     </span>
                   </li>
                 ))}
@@ -132,14 +183,14 @@ export default async function DashboardPage() {
             ) : (
               <p className="text-muted-foreground text-sm">No projects yet</p>
             )}
-            {profile?.role !== "client" && (
+            {!isClient && (
               <Link href="/dashboard/projects" className="mt-4 block">
                 <Button variant="ghost" className="w-full">
                   View all projects <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             )}
-            {profile?.role === "client" && (
+            {isClient && (
               <Link href="/dashboard/my-projects" className="mt-4 block">
                 <Button variant="ghost" className="w-full">
                   View all projects <ArrowRight className="ml-2 h-4 w-4" />
@@ -149,7 +200,46 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        {profile?.role !== "client" && (
+        {!isClient && openTickets.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-4 w-4" />
+                Open Client Requests
+              </CardTitle>
+              <CardDescription>Requests requiring attention</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {openTickets.map((ticket: any) => (
+                  <div key={ticket.id} className="flex items-start justify-between gap-3">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{ticket.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {ticket.project?.name} · by {ticket.requester?.full_name || "Client"}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <div className={`w-2 h-2 rounded-full ${statusColors[ticket.status] || "bg-gray-400"}`} />
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {ticket.status.replace("_", " ")}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {isAdmin && (
+                <Link href="/dashboard/projects" className="mt-4 block">
+                  <Button variant="ghost" className="w-full">
+                    Manage projects <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {!isClient && openTickets.length === 0 && (
           <Card>
             <CardHeader>
               <CardTitle>My Tasks</CardTitle>
@@ -162,7 +252,7 @@ export default async function DashboardPage() {
                     <li key={task.id} className="flex items-center justify-between">
                       <span className="font-medium truncate max-w-[200px]">{task.title}</span>
                       <span className="text-sm text-muted-foreground capitalize">
-                        {task.status.replace('_', ' ')}
+                        {task.status.replace("_", " ")}
                       </span>
                     </li>
                   ))}
@@ -179,17 +269,17 @@ export default async function DashboardPage() {
           </Card>
         )}
 
-        {profile?.role === "client" && (
+        {isClient && (
           <Card>
             <CardHeader>
               <CardTitle>Quick Actions</CardTitle>
               <CardDescription>Common actions</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href="/dashboard/requests/new">
+              <Link href="/dashboard/requests">
                 <Button className="w-full justify-start">
                   <MessageSquare className="mr-2 h-4 w-4" />
-                  Request Changes
+                  Submit a Request
                 </Button>
               </Link>
             </CardContent>
