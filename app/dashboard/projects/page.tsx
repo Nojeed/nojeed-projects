@@ -27,6 +27,7 @@ import { Textarea } from "@/components/ui/textarea";
 
 export default function ProjectsPage() {
   const supabase = createClient();
+  const [profile, setProfile] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -42,6 +43,7 @@ export default function ProjectsPage() {
 
   const fetchProjects = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
@@ -54,6 +56,7 @@ export default function ProjectsPage() {
         *,
         project_members(count)
       `);
+    setProfile(profile)
 
     if (profile?.role !== "admin") {
       const { data: memberProjects } = await supabase
@@ -126,6 +129,9 @@ export default function ProjectsPage() {
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
           <p className="text-muted-foreground">Manage your projects</p>
         </div>
+        { profile.role === "admin" &&
+
+        
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button>
@@ -173,6 +179,7 @@ export default function ProjectsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
