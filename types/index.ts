@@ -12,8 +12,37 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   avatar_url?: string;
+  bio?: string;
+  portfolio_url?: string;
+  social_links?: Record<string, string>;
   created_at: string;
   updated_at: string;
+}
+
+export interface JobTitle {
+  id: string;
+  title: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProfileJobTitle {
+  profile_id: string;
+  job_title_id: string;
+  job_title?: JobTitle;
+}
+
+export interface ProfileSkill {
+  profile_id: string;
+  skill_id: string;
+  skill?: Skill;
 }
 
 export interface Project {

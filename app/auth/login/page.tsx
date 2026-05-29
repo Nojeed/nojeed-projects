@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AlertCircle } from "lucide-react";
+import Link from "next/link";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -29,13 +30,13 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const username = formData.get("username") as string;
     const password = formData.get("password") as string;
 
     const supabase = createClient();
-    
+
     // Look up email by username
     const { data: profile } = await supabase
       .from("profiles")
@@ -110,10 +111,16 @@ export default function LoginPage() {
               />
             </div>
           </CardContent>
-          <CardFooter>
+          <CardFooter className="flex flex-col gap-4">
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Signing in..." : "Sign In"}
             </Button>
+            <p className="text-sm text-muted-foreground text-center">
+              Don&apos;t have an account?{" "}
+              <Link href="/auth/sign-up" className="text-primary hover:underline">
+                Create a new account
+              </Link>
+            </p>
           </CardFooter>
         </form>
       </Card>

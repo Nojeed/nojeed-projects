@@ -13,6 +13,8 @@ import {
   Settings,
   LogOut,
   Menu,
+  Briefcase,
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,12 +35,14 @@ interface NavItem {
 
 const navItems: NavItem[] = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard, roles: ["admin", "project_manager", "employee", "client"] },
+  { title: "My Profile", href: "/dashboard/profile", icon: User, roles: ["admin", "project_manager", "employee", "client"] },
   { title: "Projects", href: "/dashboard/projects", icon: FolderKanban, roles: ["admin", "project_manager", "employee"] },
   { title: "My Tasks", href: "/dashboard/tasks", icon: CheckSquare, roles: ["admin", "project_manager", "employee"] },
   { title: "My Projects", href: "/dashboard/my-projects", icon: FolderKanban, roles: ["client"] },
   { title: "Requests", href: "/dashboard/requests", icon: MessageSquare, roles: ["client"] },
   { title: "Team", href: "/dashboard/team", icon: Users, roles: ["admin"] },
-  { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["admin", "project_manager", "employee", "client"] },
+  { title: "Careers", href: "/dashboard/careers", icon: Briefcase, roles: ["admin"] },
+  // { title: "Settings", href: "/dashboard/settings", icon: Settings, roles: ["admin", "project_manager", "employee", "client"] },
 ];
 
 interface SidebarProps {
@@ -70,7 +74,9 @@ export function Sidebar({ profile }: SidebarProps) {
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1">
           {filteredNavItems.map((item) => {
-            const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+            const isActive = item.href === "/dashboard"
+              ? pathname === "/dashboard"
+              : (pathname === item.href || pathname.startsWith(item.href + "/"));
             return (
               <li key={item.href}>
                 <Link
